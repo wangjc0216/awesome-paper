@@ -47,14 +47,61 @@ Gorilla优化即使在遇到故障时也保持写入和读取的高可用性，�
 挑战来自高数据插入率、总数据量、实时聚合和可靠性要求。同时监控数据库85%的查询来自近26小时内收集的数据。进一步的分析使得我们确认我们使用内存数据库替换基于磁盘的数据库。
 更长远来看，可以将Gorilla这个内存数据库看做是基于磁盘持久存储的cache。我们可以获得内存系统的速度，也可以获得磁盘的持久性。
 
-2015年，Facebook就存储了20亿个time series，其中每秒约添加1200万个sample/point,这代表每天超过1万亿点，每个sample/point 占16个bytes，那么存储就会占16TB.
-我们使用XOR浮点压缩技术，会压缩到平均每个sample/point到1.37bytes,缩小了12x。
+**2015年，Facebook就存储了20亿个time series，其中每秒约添加1200万个sample/point,这代表每天超过1万亿点，每个sample/point 占16个bytes，那么存储就会占16TB.
+我们使用XOR浮点压缩技术，会压缩到平均每个sample/point到1.37bytes,缩小了12x。**
 
 我们在不同的数据中心部署多个Gorilla实例，并将数据流式传输到每一个实例来满足可用性要求，而不试图保证一致性(consistency)。
 
 
 ## 背景和要求(2)
 
+### ODS(2.1)
+
+ODS (Operational Data Store): 操作型数据存储。 ODS 在facebook monitor中非常重要的一部分(partition)。
+
+ODS由一个时序数据库(TSDB)、一个查询服务、一个监测和告警服务。
+
+#### 监控系统读取性能问题
+
+在2013年时，HBase时间序列无法扩展处理未来的读取负载。虽然交互式图表的平均读取延迟是可以接受的，但第90分位的查询时间已经增加到几秒，从而阻碍了我们的自动化。
+几千个time series的查询也需要10多秒才能完成，导致用户需要自我审查查询的使用方法。
+```
+Larger queries executing over sparse datasets would timeout as the HBase data store was tuned to prioritize writes.
+由于 HBase 数据存储已调整为优先写入，因此在稀疏数据集上执行的较大查询将超时。
+```
+Facebook的hive也不合适，因为有ODS相比，它的查询延迟已经比ODS高出几个数量级，而查询效率和延迟是我们重点关注点。
+**查询延迟和效率是主要关注点。**
+
+
+【下面的描述针对读写cache并不能满足当前的监控场景】
+「读缓存」我们于是将注意力转向内存缓存，ODS已经使用了一个简单的读取缓存。它主要针对多个仪表盘共享相同时间序列的图表系统，困难的场景是当仪表盘查询最近的数据点，在缓存中丢失，然后直接向Hbase
+数据存储发出请求。
+「写缓存」我们还考虑了基于独立的Memcache的直写缓存，但是拒绝了它，因为将新数据添加到已经存在的time series中需要一个读写周期(read/write cycle)，但是对于Memcache服务的流量会很高。
+
+结论： 我们需要一个更有效(efficient)的解决方案。
+
+
+### Gorilla requirements(2.2)
+
+下面列出Gorilla应该具备哪些能力：
+
+- 可存储20亿个time series
+
+- 每秒1200w 个point/sample; 每分钟 7亿+ point/sample
+
+- 峰值每秒超过4w查询
+
+- 在1微秒内读取成功
+
+- 支持多每15s读取一次
+
+- 两个不在同一位置内存的副本(用于灾备)
+
+- 单个服务宕机依然保持可用(高可用)
+
+- 能够快速扫描所有内存数据
+
+- 支持每年至少两倍数据的增长
 
 
 
