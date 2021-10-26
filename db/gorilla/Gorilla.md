@@ -127,6 +127,13 @@ OpenTSDB也有更丰富的数据模型来标识time series。
 
 
 ### Whisper、Graphite(3.2)
+Graphite 是以Whisper协议来存储监控指标数据的。一个Round Robin Database (RRD) style。
+此文件格式希望定期带有时间戳，并且不支持时序的抖动。Gorilla可以处理任意时间间隔的变化。
+With Whisper，每条时序保存在不同的文件中，新的时间样本在一定时间间隔后会覆盖旧的样本。 
+Gorilla也是类似的，但是不同是，Gorilla会将最近的数据保存在内存中。但是Graphite是聚焦磁盘的，所以查询延迟会高于Gorilla。
+
+
+
 
 
 ### InfluxDB(3.3)
