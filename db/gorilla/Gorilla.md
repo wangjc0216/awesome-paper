@@ -73,7 +73,7 @@ Facebook的hive也不合适，因为有ODS相比，它的查询延迟已经比OD
 **查询延迟和效率是主要关注点。**
 
 
-【下面的描述针对读写cache并不能满足当前的监控场景】
+【下面的描述针对读写cache并不能满足当前的监控场景?】 -cache miss [可以看陈浩的cache 文章]
 「读缓存」我们于是将注意力转向内存缓存，ODS已经使用了一个简单的读取缓存。它主要针对多个仪表盘共享相同时间序列的图表系统，困难的场景是当仪表盘查询最近的数据点，在缓存中丢失，然后直接向Hbase
 数据存储发出请求。
 「写缓存」我们还考虑了基于独立的Memcache的直写缓存，但是拒绝了它，因为将新数据添加到已经存在的time series中需要一个读写周期(read/write cycle)，但是对于Memcache服务的流量会很高。
@@ -84,14 +84,14 @@ Facebook的hive也不合适，因为有ODS相比，它的查询延迟已经比OD
 ### Gorilla requirements(2.2)
 
 下面列出Gorilla应该具备哪些能力：
-
+```bigquery
 - 可存储20亿个time series
 
 - 每秒1200w 个point/sample; 每分钟 7亿+ point/sample
 
 - 峰值每秒超过4w查询
 
-- 在1微秒内读取成功
+- 在1毫秒内读取成功
 
 - 支持多每15s读取一次
 
@@ -102,10 +102,35 @@ Facebook的hive也不合适，因为有ODS相比，它的查询延迟已经比OD
 - 能够快速扫描所有内存数据
 
 - 支持每年至少两倍数据的增长
+```
+
+在Section 3 会简单比较其他TSDB实现方式。
+
+在Section 4会介绍Gorilla的实现细节。首先会讨论在4.1讨论新的timestamp和data value的压缩计划(schemes)。在4.4中会介绍Gorilla在区域性灾难中的高可用。
+
+在Section 5启用了Gorilla的新工具，并在Section 6 介绍了开发和部署Gorilla的相关经验。
 
 
 
 ## TSDB之间的比较(3)  / 与之前的方案进行比对
+
+由于Gorilla一开始就被设计为所有数据存储在内存中，因此内存结构也不同于现有TSDB。
+但是如果将Gorilla看做是其他磁盘TSDB之前的中间存储，那么Gorilla可以看做是任何TSDB的直写缓存(修改相对简单)。 **Gorilla的摄取速度和水平扩展与现有方案类似。**
+
+### OpenTSDB (3.1)
+
+OpenTSDB是基于HBase，非常接近我们使用长期数据的时候的HBase Storage Layer，两者有类似的表结构，在优化和水平扩展方面基本类似。**我们发现更高效的监控工具所需要的查询量要比基于磁盘的存储支持的查询量要大。**
+
+与OpenTSDB不同，ODS HBase会将旧数据做rollup aggregation(汇总聚合)来节省空间,旧数据会失去部分精度。OpenTSDB则不会。我们觉得旧数据价值较低，减少的长时间查询和空间成本，值得精度损失。
+
+OpenTSDB也有更丰富的数据模型来标识time series。
+
+
+### Whisper、Graphite(3.2)
+
+
+### InfluxDB(3.3)
+
 
 
 
